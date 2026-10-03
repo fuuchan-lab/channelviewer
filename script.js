@@ -1,46 +1,457 @@
-const channels = [
-  {name:'THE FIRST TAKE',handle:'@The_FirstTake',subs:11200000,growth:2.4,category:'音楽',color:'#e6b2a8',initial:'TF'},
-  {name:'HikakinTV',handle:'@HikakinTV',subs:18900000,growth:1.8,category:'エンタメ',color:'#f2d469',initial:'HK'},
-  {name:'東海オンエア',handle:'@TokaiOnAir',subs:7110000,growth:3.7,category:'エンタメ',color:'#b9d9ee',initial:'TO'},
-  {name:'料理研究家リュウジのバズレシピ',handle:'@ryuji_foodlabo',subs:4890000,growth:4.2,category:'料理',color:'#efb7c5',initial:'り'},
-  {name:"Kevin's English Room",handle:'@KevinsEnglishRoom',subs:2280000,growth:5.1,category:'ライフスタイル',color:'#c5e5bd',initial:'KE'},
-  {name:'サワヤンゲームズ',handle:'@SAWAYAN-GAMES',subs:1920000,growth:1.2,category:'ゲーム',color:'#c7c0ee',initial:'SG'},
-  {name:'中田敦彦のYouTube大学',handle:'@NKTofficial',subs:5680000,growth:2.9,category:'教育',color:'#f0c78e',initial:'中'},
-  {name:'もちまる日記',handle:'@motimaru',subs:2160000,growth:1.6,category:'ペット',color:'#d4c2ad',initial:'も'},
-  {name:'VAIENCE',handle:'@vaience',subs:1410000,growth:6.8,category:'サイエンス',color:'#a9d8d1',initial:'VA'},
-  {name:'QuizKnock',handle:'@QuizKnock',subs:2350000,growth:2.2,category:'教育',color:'#a8c4e5',initial:'QK'},
-  {name:'カジサック KAJISAC',handle:'@kajisac',subs:2470000,growth:1.5,category:'エンタメ',color:'#f1b29f',initial:'KA'},
-  {name:'山澤 礼明【筋肉チャンネル】',handle:'@Yamasawa',subs:1290000,growth:3.1,category:'フィットネス',color:'#b9ddb1',initial:'山'}
-];
-const storedChannels = JSON.parse(localStorage.getItem('subscope-channels') || 'null');
-if (storedChannels) channels.splice(0, channels.length, ...storedChannels);
-let visibleCount = 7;
+/* ===== 設定の保存キー ===== */
+const API_KEY_KEY = 'subscope-api-key';
+const CLIENT_ID_KEY = 'subscope-client-id';
+const ACCOUNT_KEY = 'subscope-drive-account';
+const CHANNELS_KEY = 'subscope-channels';
+
+const DRIVE_FOLDER_NAME = 'ChannelViewer';
+const DATA_FILE_NAME = 'data.json';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const AUTH_SCOPE = DRIVE_SCOPE + ' https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+
+function getApiKey() { return localStorage.getItem(API_KEY_KEY) || '' }
+function setApiKey(v) { localStorage.setItem(API_KEY_KEY, v) }
+function getClientId() { return localStorage.getItem(CLIENT_ID_KEY) || '' }
+function setClientId(v) { localStorage.setItem(CLIENT_ID_KEY, v) }
+
+function loadCachedAccount() {
+  try { const raw = localStorage.getItem(ACCOUNT_KEY); return raw ? JSON.parse(raw) : null }
+  catch { return null }
+}
+function saveCachedAccount(acc) {
+  if (acc) localStorage.setItem(ACCOUNT_KEY, JSON.stringify(acc));
+  else localStorage.removeItem(ACCOUNT_KEY);
+}
+
+/* ===== チャンネルデータ（実データのみ。id を持たない旧デモデータは除外する） ===== */
+let channels = [];
+try {
+  const stored = JSON.parse(localStorage.getItem(CHANNELS_KEY) || 'null');
+  if (Array.isArray(stored)) channels = stored.filter(c => c && c.id);
+} catch { /* 無視 */ }
+
+let visibleCount = Math.max(channels.length, 7);
 const yen = new Intl.NumberFormat('ja-JP');
 const rows = document.querySelector('#channelRows');
 const search = document.querySelector('#searchInput');
 const sort = document.querySelector('#sortSelect');
-const thumbnailImages = ['https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=100&h=100&fit=crop','https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=100&h=100&fit=crop','https://images.unsplash.com/photo-1511512578047-dfb367046420?w=100&h=100&fit=crop','https://images.unsplash.com/photo-1556910103-1c02745aae4d?w=100&h=100&fit=crop','https://images.unsplash.com/photo-1529139574466-a303027c1d8b?w=100&h=100&fit=crop','https://images.unsplash.com/photo-1542751371-adc38448a05e?w=100&h=100&fit=crop','https://images.unsplash.com/photo-1531058020387-3be344556be6?w=100&h=100&fit=crop','https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100&h=100&fit=crop'];
-function avatar(channel,index){return `<span class="avatar-image" style="background:${channel.color}"><img src="${channel.thumbnail || thumbnailImages[index % thumbnailImages.length]}" alt="${channel.name}のサムネイル" onerror="this.style.display='none'"><span>${channel.initial}</span></span>`}
-function render(){
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+
+function persistChannels() {
+  localStorage.setItem(CHANNELS_KEY, JSON.stringify(channels));
+  void syncToDrive();
+}
+
+function avatar(channel) {
+  const initial = escapeHtml((channel.initial || channel.name || '?').slice(0, 2));
+  const img = channel.thumbnail ? `<img src="${channel.thumbnail}" alt="${escapeHtml(channel.name)}のサムネイル" onerror="this.style.display='none'">` : '';
+  return `<span class="avatar-image" style="background:${channel.color || '#d7e3da'}">${img}<span>${initial}</span></span>`;
+}
+
+function formatSubs(value) {
+  return value === null || value === undefined ? '非公開' : yen.format(value);
+}
+
+function render() {
   const query = search.value.toLowerCase();
   const mode = sort.value;
-  const filtered = channels.filter(c => `${c.name}${c.handle}${c.category}`.toLowerCase().includes(query));
-  if(mode!=='manual') filtered.sort((a,b)=>mode==='name'?a.name.localeCompare(b.name,'ja'):mode==='growth'?b.growth-a.growth:b.subs-a.subs);
-  rows.innerHTML = filtered.slice(0,visibleCount).map((c,index)=>`<div class="channel-row" draggable="true" data-channel="${c.handle}"><div class="drag-handle" aria-hidden="true">⋮⋮</div><div class="channel-info">${avatar(c,index)}<div><div class="channel-name">${c.name}</div><div class="channel-handle">${c.handle}</div></div></div><span class="number">${formatSubs(c.subs)}</span><span class="gain">+${c.growth.toFixed(1)}%</span><span class="category">${c.category}</span><span class="status">Tracking</span><button class="row-menu" aria-label="${c.name}のメニュー">•••</button></div>`).join('');
-  rows.querySelectorAll('.channel-row').forEach(row=>{
-    row.addEventListener('dragstart',()=>row.classList.add('dragging'));
-    row.addEventListener('dragend',()=>{row.classList.remove('dragging');saveDraggedOrder()});
-    row.addEventListener('dragover',event=>{event.preventDefault();const dragging=rows.querySelector('.dragging');if(dragging&&dragging!==row){const box=row.getBoundingClientRect();rows.insertBefore(dragging,event.clientY<box.top+box.height/2?row:row.nextSibling)}});
+  const filtered = channels.filter(c => `${c.name}${c.handle}`.toLowerCase().includes(query));
+  if (mode === 'name') filtered.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+  else if (mode === 'subscribers' || mode === 'growth') filtered.sort((a, b) => (b.subs ?? -1) - (a.subs ?? -1));
+
+  rows.innerHTML = filtered.slice(0, visibleCount).map(c => `<div class="channel-row" draggable="true" data-channel="${escapeHtml(c.handle)}">
+      <div class="drag-handle" aria-hidden="true">⋮⋮</div>
+      <div class="channel-info">${avatar(c)}<div><div class="channel-name">${escapeHtml(c.name)}</div><div class="channel-handle">${escapeHtml(c.handle)}</div></div></div>
+      <span class="number">${formatSubs(c.subs)}</span>
+      <span class="gain">ー</span>
+      <span class="category">ー</span>
+      <span class="status">Tracking</span>
+      <button class="row-menu" aria-label="${escapeHtml(c.name)}を削除" data-remove-id="${escapeHtml(c.id)}">•••</button>
+    </div>`).join('');
+
+  rows.querySelectorAll('.channel-row').forEach(row => {
+    row.addEventListener('dragstart', () => row.classList.add('dragging'));
+    row.addEventListener('dragend', () => { row.classList.remove('dragging'); saveDraggedOrder() });
+    row.addEventListener('dragover', event => {
+      event.preventDefault();
+      const dragging = rows.querySelector('.dragging');
+      if (dragging && dragging !== row) {
+        const box = row.getBoundingClientRect();
+        rows.insertBefore(dragging, event.clientY < box.top + box.height / 2 ? row : row.nextSibling);
+      }
+    });
   });
+  rows.querySelectorAll('.row-menu').forEach(btn => {
+    btn.addEventListener('click', () => removeChannel(btn.dataset.removeId));
+  });
+
   document.querySelector('#resultCount').textContent = `${filtered.length} channels`;
   document.querySelector('#loadMore').style.display = filtered.length > visibleCount ? 'block' : 'none';
 }
-function formatSubs(value){return yen.format(value)}
-function updateMetrics(){const total=channels.reduce((sum,c)=>sum+c.subs,0);document.querySelector('#totalSubscribers').textContent=formatSubs(total);document.querySelector('#monthlyGrowth').textContent=`+${formatSubs(Math.round(total*.048))}`}
-function saveDraggedOrder(){const order=[...rows.querySelectorAll('.channel-row')].map(row=>row.dataset.channel);const reordered=order.map(handle=>channels.find(channel=>channel.handle===handle)).filter(Boolean);channels.splice(0,reordered.length,...reordered);localStorage.setItem('subscope-channels',JSON.stringify(channels));toast('表示順を保存しました')}
-function openModal(){document.querySelector('#modal').classList.add('open');document.querySelector('#channelInput').focus()}
-function closeModal(){document.querySelector('#modal').classList.remove('open')}
-function toast(message){const el=document.querySelector('#toast');el.textContent=message;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600)}
-document.querySelector('#openAdd').onclick=openModal;document.querySelector('#openAddFromSidebar').onclick=openModal;document.querySelector('#closeModal').onclick=closeModal;document.querySelector('#cancelModal').onclick=closeModal;document.querySelector('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal()});search.addEventListener('input',render);sort.addEventListener('change',render);document.querySelector('#loadMore').onclick=()=>{visibleCount=channels.length;render()};document.querySelector('#dateButton').onclick=()=>toast('期間を変更する機能は準備中です');document.querySelectorAll('.nav-item').forEach(item=>item.onclick=()=>{document.querySelectorAll('.nav-item').forEach(nav=>nav.classList.remove('active'));item.classList.add('active');toast(`${item.textContent.trim()}ビューは準備中です`) });document.querySelector('#addForm').onsubmit=e=>{e.preventDefault();const value=document.querySelector('#channelInput').value.trim();if(value){toast(`${value} を追加しました`);document.querySelector('#addForm').reset();closeModal()}};
-updateMetrics();render();
-document.querySelector('#addForm').onsubmit=e=>{e.preventDefault();const value=document.querySelector('#channelInput').value.trim();if(value){const handle=value.match(/@[\w-]+/)?.[0] || value.split('/').filter(Boolean).pop() || value;const name=handle.replace(/^@/,'').replace(/[-_]/g,' ');channels.push({name,handle:`@${name.replace(/\s+/g,'')}`,subs:0,growth:0,category:'未分類',color:'#d2e7bd',initial:name.slice(0,2)});localStorage.setItem('subscope-channels',JSON.stringify(channels));visibleCount=channels.length;updateMetrics();render();toast(`${name} を追加しました`);document.querySelector('#addForm').reset();closeModal()}};
+
+function updateMetrics() {
+  const known = channels.filter(c => typeof c.subs === 'number');
+  const total = known.reduce((sum, c) => sum + c.subs, 0);
+  document.querySelector('#totalSubscribers').textContent = known.length > 0 ? formatSubs(total) : 'ー';
+  document.querySelector('.nav-count').textContent = String(channels.length);
+}
+
+function saveDraggedOrder() {
+  const order = [...rows.querySelectorAll('.channel-row')].map(row => row.dataset.channel);
+  const reordered = order.map(handle => channels.find(channel => channel.handle === handle)).filter(Boolean);
+  if (reordered.length === channels.length) channels.splice(0, reordered.length, ...reordered);
+  persistChannels();
+  toast('表示順を保存しました');
+}
+
+function removeChannel(id) {
+  const target = channels.find(c => c.id === id);
+  if (!target) return;
+  if (!confirm(`「${target.name}」を削除しますか？`)) return;
+  channels = channels.filter(c => c.id !== id);
+  persistChannels();
+  updateMetrics();
+  render();
+  toast('削除しました');
+}
+
+function openModal() { document.querySelector('#modal').classList.add('open'); document.querySelector('#channelInput').focus() }
+function closeModal() { document.querySelector('#modal').classList.remove('open') }
+function toast(message) {
+  const el = document.querySelector('#toast');
+  el.textContent = message;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+/* ===== YouTube Data API ===== */
+
+function parseChannelInput(raw) {
+  const value = raw.trim();
+  if (!value) return null;
+
+  const idMatch = value.match(/UC[a-zA-Z0-9_-]{22}/);
+  if (idMatch) return { type: 'id', value: idMatch[0] };
+
+  const urlMatch = value.match(/youtube\.com\/(channel\/|@|c\/|user\/)([^/?&#]+)/i);
+  if (urlMatch) {
+    const prefix = urlMatch[1];
+    const name = urlMatch[2];
+    if (prefix === 'channel/') return { type: 'id', value: name };
+    if (prefix === '@') return { type: 'handle', value: '@' + name };
+    if (prefix === 'user/') return { type: 'username', value: name };
+    return { type: 'handle', value: '@' + name };
+  }
+
+  if (value.startsWith('@')) return { type: 'handle', value };
+  return { type: 'handle', value: '@' + value };
+}
+
+function toChannelRecord(item) {
+  const handle = item.snippet.customUrl
+    ? (item.snippet.customUrl.startsWith('@') ? item.snippet.customUrl : '@' + item.snippet.customUrl)
+    : '@' + item.id;
+  return {
+    id: item.id,
+    name: item.snippet.title,
+    handle,
+    thumbnail: item.snippet.thumbnails?.default?.url || '',
+    initial: item.snippet.title.slice(0, 2),
+    color: '#d7e3da',
+    subs: item.statistics.hiddenSubscriberCount ? null : Number(item.statistics.subscriberCount),
+  };
+}
+
+async function fetchChannelByRef(ref, apiKey) {
+  let url;
+  if (ref.type === 'id') url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${encodeURIComponent(ref.value)}&key=${apiKey}`;
+  else if (ref.type === 'handle') url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&forHandle=${encodeURIComponent(ref.value)}&key=${apiKey}`;
+  else url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&forUsername=${encodeURIComponent(ref.value)}&key=${apiKey}`;
+
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'APIエラー');
+  if (!data.items || data.items.length === 0) throw new Error('チャンネルが見つかりませんでした。');
+  return toChannelRecord(data.items[0]);
+}
+
+async function fetchChannelsByIds(ids, apiKey) {
+  if (ids.length === 0) return [];
+  const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&id=${encodeURIComponent(ids.join(','))}&key=${apiKey}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error?.message || 'APIエラー');
+  return (data.items || []).map(toChannelRecord);
+}
+
+async function refreshAllChannels() {
+  const apiKey = getApiKey();
+  if (channels.length === 0) return;
+  if (!apiKey) { toast('先に設定でAPIキーを登録してください'); return; }
+  try {
+    const updated = await fetchChannelsByIds(channels.map(c => c.id), apiKey);
+    const byId = new Map(updated.map(c => [c.id, c]));
+    channels = channels.map(c => byId.get(c.id) ?? c);
+    persistChannels();
+    updateMetrics();
+    render();
+    toast('登録者数を更新しました');
+  } catch (err) {
+    toast('更新に失敗しました: ' + err.message);
+  }
+}
+
+/* ===== Googleログイン & ドライブ保存（LeadLogと同じGIS方式） ===== */
+
+let accessToken = null;
+let account = loadCachedAccount();
+let folderIdCache = null;
+let driveFileId = null;
+
+function waitForGis(timeoutMs = 5000) {
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const tick = () => {
+      if (typeof google !== 'undefined' && google.accounts?.oauth2) resolve();
+      else if (Date.now() - start > timeoutMs) reject(new Error('Googleログイン機能の読み込みに失敗しました。'));
+      else setTimeout(tick, 100);
+    };
+    tick();
+  });
+}
+
+async function getAccessToken(promptOverride) {
+  const clientId = getClientId();
+  if (!clientId) throw new Error('先に設定でGoogle OAuthクライアントIDを登録してください。');
+  await waitForGis();
+  return new Promise((resolve, reject) => {
+    const client = google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: AUTH_SCOPE,
+      callback: (res) => {
+        if (res.error) { reject(new Error(res.error)); return; }
+        accessToken = res.access_token;
+        resolve(res.access_token);
+      },
+      error_callback: (err) => reject(new Error(err.type || 'ログインに失敗しました。')),
+    });
+    client.requestAccessToken({ prompt: promptOverride ?? 'consent' });
+  });
+}
+
+async function driveFetch(url, init = {}) {
+  const res = await fetch(url, { ...init, headers: { ...(init.headers || {}), Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Googleドライブとの通信に失敗しました(${res.status}) ${body.slice(0, 160)}`);
+  }
+  return res;
+}
+
+async function ensureFolder() {
+  if (folderIdCache) return folderIdCache;
+  const q = encodeURIComponent(`name='${DRIVE_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const list = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`);
+  const data = await list.json();
+  if (data.files && data.files.length > 0) return (folderIdCache = data.files[0].id);
+  const created = await driveFetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: DRIVE_FOLDER_NAME, mimeType: 'application/vnd.google-apps.folder' }),
+  });
+  return (folderIdCache = (await created.json()).id);
+}
+
+async function findDataFile(folderId) {
+  const q = encodeURIComponent(`'${folderId}' in parents and name='${DATA_FILE_NAME}' and trashed=false`);
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`);
+  const data = await res.json();
+  return data.files && data.files.length > 0 ? data.files[0].id : null;
+}
+
+async function downloadData(fileId) {
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  return res.json();
+}
+
+async function uploadData(folderId, fileId, obj) {
+  const boundary = 'channelviewer-' + Date.now();
+  const metadata = fileId ? { name: DATA_FILE_NAME } : { name: DATA_FILE_NAME, parents: [folderId] };
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`,
+    `--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(obj)}`,
+    `\r\n--${boundary}--`,
+  ]);
+  const base = 'https://www.googleapis.com/upload/drive/v3/files';
+  const url = fileId ? `${base}/${fileId}?uploadType=multipart&fields=id` : `${base}?uploadType=multipart&fields=id`;
+  const res = await driveFetch(url, {
+    method: fileId ? 'PATCH' : 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body,
+  });
+  return (await res.json()).id;
+}
+
+async function fetchUserInfo() {
+  const res = await driveFetch('https://www.googleapis.com/oauth2/v2/userinfo');
+  const data = await res.json();
+  return { email: data.email ?? null, name: data.name ?? null, avatarUrl: data.picture ?? null };
+}
+
+/** ログイン済みなら、現在のAPIキー・クライアントID・チャンネルリストをドライブに書き込む */
+async function syncToDrive() {
+  if (!accessToken) return;
+  try {
+    const folderId = await ensureFolder();
+    if (driveFileId === null) driveFileId = await findDataFile(folderId);
+    const payload = { apiKey: getApiKey(), clientId: getClientId(), channels };
+    driveFileId = await uploadData(folderId, driveFileId, payload);
+  } catch (err) {
+    console.error('[drive-sync]', err);
+  }
+}
+
+function updateAuthUI() {
+  const initial = account ? (account.name || account.email || 'G').slice(0, 1).toUpperCase() : 'G';
+  const avatarHtml = account?.avatarUrl ? `<img src="${account.avatarUrl}" alt="">` : initial;
+  document.querySelector('#authButton').innerHTML = avatarHtml;
+  document.querySelector('#authButton').title = account ? (account.email || account.name || 'ログイン中') : 'クリックしてログイン';
+  document.querySelector('#sidebarAvatar').innerHTML = avatarHtml;
+  document.querySelector('#sidebarName').textContent = account ? (account.name || account.email || 'ログイン中') : 'ログインしていません';
+  document.querySelector('#sidebarSub').textContent = account ? 'Googleドライブに保存中' : 'クリックしてログイン';
+}
+
+async function login(promptOverride) {
+  try {
+    await getAccessToken(promptOverride);
+    const folderId = await ensureFolder();
+    driveFileId = await findDataFile(folderId);
+    account = await fetchUserInfo();
+    saveCachedAccount(account);
+
+    if (driveFileId) {
+      const remote = await downloadData(driveFileId);
+      if (typeof remote.apiKey === 'string') setApiKey(remote.apiKey);
+      if (typeof remote.clientId === 'string') setClientId(remote.clientId);
+      if (Array.isArray(remote.channels)) {
+        channels = remote.channels.filter(c => c && c.id);
+        localStorage.setItem(CHANNELS_KEY, JSON.stringify(channels));
+      }
+    } else {
+      await syncToDrive();
+    }
+
+    updateAuthUI();
+    document.querySelector('#apiKeyInput').value = getApiKey();
+    document.querySelector('#clientIdInput').value = getClientId();
+    visibleCount = Math.max(channels.length, 7);
+    updateMetrics();
+    render();
+    toast('ログインしました');
+    void refreshAllChannels();
+  } catch (err) {
+    toast('ログインに失敗しました: ' + err.message);
+  }
+}
+
+function signOut() {
+  if (accessToken && typeof google !== 'undefined' && google.accounts?.oauth2) {
+    google.accounts.oauth2.revoke(accessToken, () => {});
+  }
+  accessToken = null;
+  account = null;
+  driveFileId = null;
+  folderIdCache = null;
+  saveCachedAccount(null);
+  updateAuthUI();
+  toast('ログアウトしました');
+}
+
+function openAccountOrLogin() {
+  if (account) {
+    document.querySelector('#accountInfo').textContent = `${account.email || account.name || ''} のデータは Googleドライブの「${DRIVE_FOLDER_NAME}」フォルダに保存されています。`;
+    document.querySelector('#accountModal').classList.add('open');
+  } else {
+    void login();
+  }
+}
+
+/* ===== イベント結線 ===== */
+
+document.querySelector('#openAdd').onclick = openModal;
+document.querySelector('#openAddFromSidebar').onclick = openModal;
+document.querySelector('#closeModal').onclick = closeModal;
+document.querySelector('#cancelModal').onclick = closeModal;
+document.querySelector('#modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal() });
+
+search.addEventListener('input', render);
+sort.addEventListener('change', render);
+document.querySelector('#loadMore').onclick = () => { visibleCount = channels.length; render() };
+document.querySelector('#refreshButton').onclick = () => void refreshAllChannels();
+
+document.querySelectorAll('.nav-item').forEach(item => item.onclick = () => {
+  document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+  item.classList.add('active');
+  toast(`${item.textContent.trim()}ビューは準備中です`);
+});
+
+document.querySelector('#addForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const apiKey = getApiKey();
+  if (!apiKey) { toast('先に設定でAPIキーを登録してください'); return; }
+  const raw = document.querySelector('#channelInput').value.trim();
+  const ref = parseChannelInput(raw);
+  if (!ref) return;
+  try {
+    const record = await fetchChannelByRef(ref, apiKey);
+    if (channels.some(c => c.id === record.id)) {
+      toast('すでに追加されています');
+    } else {
+      channels.push(record);
+      visibleCount = channels.length;
+      persistChannels();
+      updateMetrics();
+      render();
+      toast(`${record.name} を追加しました`);
+    }
+    document.querySelector('#addForm').reset();
+    closeModal();
+  } catch (err) {
+    toast('追加に失敗しました: ' + err.message);
+  }
+};
+
+document.querySelector('#authButton').onclick = openAccountOrLogin;
+document.querySelector('#sidebarProfile').onclick = openAccountOrLogin;
+document.querySelector('#closeAccountModal').onclick = () => document.querySelector('#accountModal').classList.remove('open');
+document.querySelector('#cancelAccountModal').onclick = () => document.querySelector('#accountModal').classList.remove('open');
+document.querySelector('#accountModal').addEventListener('click', e => { if (e.target.id === 'accountModal') e.target.classList.remove('open') });
+document.querySelector('#signOutBtn').onclick = () => { signOut(); document.querySelector('#accountModal').classList.remove('open') };
+
+document.querySelector('#settingsButton').onclick = () => {
+  document.querySelector('#apiKeyInput').value = getApiKey();
+  document.querySelector('#clientIdInput').value = getClientId();
+  document.querySelector('#settingsModal').classList.add('open');
+};
+document.querySelector('#closeSettingsModal').onclick = () => document.querySelector('#settingsModal').classList.remove('open');
+document.querySelector('#cancelSettingsModal').onclick = () => document.querySelector('#settingsModal').classList.remove('open');
+document.querySelector('#settingsModal').addEventListener('click', e => { if (e.target.id === 'settingsModal') e.target.classList.remove('open') });
+document.querySelector('#settingsForm').onsubmit = (e) => {
+  e.preventDefault();
+  setApiKey(document.querySelector('#apiKeyInput').value.trim());
+  setClientId(document.querySelector('#clientIdInput').value.trim());
+  document.querySelector('#settingsModal').classList.remove('open');
+  toast('設定を保存しました');
+  void syncToDrive();
+};
+
+/* ===== 初期化 ===== */
+updateAuthUI();
+updateMetrics();
+render();
+if (channels.length > 0 && getApiKey()) void refreshAllChannels();
