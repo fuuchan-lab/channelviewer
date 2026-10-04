@@ -1,0 +1,19 @@
+{
+  "name": "ChannelViewer",
+  "short_name": "ChannelViewer",
+  "description": "複数のYouTubeチャンネルの登録者数をリアルタイムに一覧表示・比較するアプリ",
+  "lang": "ja",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "./",
+  "scope": "./",
+  "background_color": "#060c1f",
+  "theme_color": "#060c1f",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

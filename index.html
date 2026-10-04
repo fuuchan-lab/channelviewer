@@ -3,14 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>チャンネルビューアー ChanenlViewer | YouTube登録者数モニター</title>
+  <title>ChannelViewer | YouTube登録者数モニター</title>
+  <meta name="description" content="複数のYouTubeチャンネルの登録者数をリアルタイムに一覧表示・比較するアプリ" />
+  <meta name="theme-color" content="#060c1f" />
+  <link rel="icon" href="favicon.ico" sizes="any">
+  <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="favicon-16.png" type="image/png" sizes="16x16">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Noto+Sans+JP:wght@400;500;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="youtube.css" />
-  <link rel="stylesheet" href="dark.css" />
-  <link rel="stylesheet" href="ember.css" />
   <link rel="stylesheet" href="drag.css" />
   <link rel="stylesheet" href="thumbnails.css" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -18,7 +23,7 @@
 <body>
   <div class="app-shell">
     <aside class="sidebar">
-      <div class="brand"><span class="brand-mark"><span class="play-triangle"></span></span><span>チャンネルビューアー<br><small>ChanenlViewer</small></span></div>
+      <div class="brand"><span class="brand-mark"><span class="play-triangle"></span></span><span>ChannelViewer<br><small>チャンネルビューアー</small></span></div>
       <div class="sidebar-label">WORKSPACE</div>
       <nav class="nav-list" aria-label="メインナビゲーション">
         <button class="nav-item active" data-view="overview"><span class="nav-icon">◈</span>概要 <span class="nav-count">12</span></button>
@@ -44,7 +49,7 @@
           <article class="metric-card"><div class="metric-top"><span>平均エンゲージメント</span><span class="metric-icon coral">◎</span></div><div class="metric-value">準備中</div><div class="metric-footer"><span>対応予定の機能です</span></div></article>
         </section>
         <section class="section-head"><div><div class="eyebrow">MONITORED CHANNELS <span>●</span></div><h2>チャンネル一覧</h2></div><div class="table-tools"><label class="search-box"><span>⌕</span><input id="searchInput" type="search" placeholder="チャンネルを検索" /></label><select id="sortSelect" aria-label="並び替え"><option value="manual" selected>手動順</option><option value="subscribers">登録者数順</option><option value="growth">増加率順</option><option value="name">名前順</option></select><button class="filter-button" aria-label="フィルター">☷</button></div></section>
-        <section class="channel-table" aria-label="チャンネル一覧"><div class="table-header"><span>チャンネル</span><span>登録者数</span><span>30日間の増加</span><span>カテゴリー</span><span>ステータス</span><span></span></div><div id="channelRows"></div><div class="table-footer"><span id="resultCount">12 channels</span><button class="load-more" id="loadMore">すべて表示　→</button></div></section>
+        <section class="channel-table" aria-label="チャンネル一覧"><div class="table-header"><span></span><span>チャンネル</span><span>登録者数</span><span>30日間の増加</span><span>カテゴリー</span><span>ステータス</span><span></span></div><div id="channelRows"></div><div class="table-footer"><span id="resultCount">12 channels</span><button class="load-more" id="loadMore">すべて表示　→</button></div></section>
       </div>
     </main>
   </div>

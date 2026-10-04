@@ -57,22 +57,66 @@ function formatSubs(value) {
   return value === null || value === undefined ? '非公開' : yen.format(value);
 }
 
+/** 記録した登録者数の履歴から、行に表示する小さな折れ線グラフ（SVG）を作る */
+function sparklineSvg(history) {
+  if (!history || history.length < 2) return '';
+  const values = history.map(h => h.subs);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const w = 64, h = 22;
+  const points = values.map((v, i) => {
+    const x = values.length > 1 ? (i / (values.length - 1)) * w : 0;
+    const y = h - ((v - min) / range) * h;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  const trendUp = values[values.length - 1] >= values[0];
+  const color = trendUp ? '#2bdf99' : '#ff5468';
+  return `<svg class="row-spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+}
+
+/** 「30日間の増加」列の中身。記録が2件以上たまったら、実際の差分からグラフと増減率を出す */
+function renderGainCell(c) {
+  const history = c.history || [];
+  const spark = sparklineSvg(history);
+  if (history.length < 2) {
+    return { cls: '', html: `<small>収集中</small>` };
+  }
+  const first = history[0].subs;
+  const last = history[history.length - 1].subs;
+  const diff = last - first;
+  const pct = first > 0 ? (diff / first) * 100 : 0;
+  const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : '';
+  const sign = diff > 0 ? '+' : '';
+  return { cls, html: `${spark}<small>${sign}${pct.toFixed(1)}%</small>` };
+}
+
 function render() {
   const query = search.value.toLowerCase();
   const mode = sort.value;
   const filtered = channels.filter(c => `${c.name}${c.handle}`.toLowerCase().includes(query));
   if (mode === 'name') filtered.sort((a, b) => a.name.localeCompare(b.name, 'ja'));
-  else if (mode === 'subscribers' || mode === 'growth') filtered.sort((a, b) => (b.subs ?? -1) - (a.subs ?? -1));
+  else if (mode === 'subscribers') filtered.sort((a, b) => (b.subs ?? -1) - (a.subs ?? -1));
+  else if (mode === 'growth') {
+    filtered.sort((a, b) => {
+      const da = a.history && a.history.length > 1 ? a.history[a.history.length - 1].subs - a.history[0].subs : -Infinity;
+      const db = b.history && b.history.length > 1 ? b.history[b.history.length - 1].subs - b.history[0].subs : -Infinity;
+      return db - da;
+    });
+  }
 
-  rows.innerHTML = filtered.slice(0, visibleCount).map(c => `<div class="channel-row" draggable="true" data-channel="${escapeHtml(c.handle)}">
+  rows.innerHTML = filtered.slice(0, visibleCount).map(c => {
+    const gain = renderGainCell(c);
+    return `<div class="channel-row" draggable="true" data-channel="${escapeHtml(c.handle)}">
       <div class="drag-handle" aria-hidden="true">⋮⋮</div>
       <div class="channel-info">${avatar(c)}<div><div class="channel-name">${escapeHtml(c.name)}</div><div class="channel-handle">${escapeHtml(c.handle)}</div></div></div>
       <span class="number">${formatSubs(c.subs)}</span>
-      <span class="gain">ー</span>
+      <span class="gain ${gain.cls}">${gain.html}</span>
       <span class="category">ー</span>
       <span class="status">Tracking</span>
       <button class="row-menu" aria-label="${escapeHtml(c.name)}を削除" data-remove-id="${escapeHtml(c.id)}">•••</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   rows.querySelectorAll('.channel-row').forEach(row => {
     row.addEventListener('dragstart', () => row.classList.add('dragging'));
@@ -189,6 +233,18 @@ async function fetchChannelsByIds(ids, apiKey) {
   return (data.items || []).map(toChannelRecord);
 }
 
+const MAX_HISTORY_POINTS = 30;
+
+/** 取得した最新の登録者数を、前回記録した値と違う時だけ履歴に積む（実際の変化だけをグラフにするため） */
+function appendHistory(history, subs) {
+  const next = Array.isArray(history) ? history.slice() : [];
+  if (typeof subs !== 'number') return next;
+  const last = next[next.length - 1];
+  if (!last || last.subs !== subs) next.push({ t: Date.now(), subs });
+  if (next.length > MAX_HISTORY_POINTS) next.splice(0, next.length - MAX_HISTORY_POINTS);
+  return next;
+}
+
 async function refreshAllChannels() {
   const apiKey = getApiKey();
   if (channels.length === 0) return;
@@ -196,7 +252,11 @@ async function refreshAllChannels() {
   try {
     const updated = await fetchChannelsByIds(channels.map(c => c.id), apiKey);
     const byId = new Map(updated.map(c => [c.id, c]));
-    channels = channels.map(c => byId.get(c.id) ?? c);
+    channels = channels.map(c => {
+      const fresh = byId.get(c.id);
+      if (!fresh) return c;
+      return { ...c, ...fresh, history: appendHistory(c.history, fresh.subs) };
+    });
     persistChannels();
     updateMetrics();
     render();
@@ -416,6 +476,7 @@ document.querySelector('#addForm').onsubmit = async (e) => {
   if (!ref) return;
   try {
     const record = await fetchChannelByRef(ref, apiKey);
+    record.history = appendHistory([], record.subs);
     if (channels.some(c => c.id === record.id)) {
       toast('すでに追加されています');
     } else {
