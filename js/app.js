@@ -550,6 +550,8 @@ function openSettings(message) {
   $('#apiKeyInput').value = getApiKey();
   $('#clientIdInput').value = drive.getCustomClientId();
   $('.advanced').open = !!drive.getCustomClientId();
+  // まだキーがない時は、取り方を最初から開いておく
+  $('#apiKeyGuide').open = !getApiKey();
   openDialog('#settingsModal');
   if (message) { toast(message); $('#apiKeyInput').focus(); }
 }

@@ -43,7 +43,19 @@ https://channelviewer.doitmyself.net/ （https://fuuchan-lab.github.io/channelvi
 
 ## 設定
 
-右上の歯車から、YouTube Data API v3 の API キーを登録してください。
+右上の歯車から、YouTube Data API v3 の API キーを登録してください（設定画面にも同じ手順を表示しています）。
+
+### YouTube Data API キーの取り方（無料・約5分）
+
+1. [Google Cloud Console](https://console.cloud.google.com/projectcreate) を開き、Google アカウントでログインする（初回は利用規約に同意）。
+2. 「新しいプロジェクト」でプロジェクト名（例: `ChannelViewer`）を入れて「作成」。
+3. [YouTube Data API v3](https://console.cloud.google.com/apis/library/youtube.googleapis.com) を開き、作ったプロジェクトが選ばれていることを確認して「有効にする」。
+4. [認証情報](https://console.cloud.google.com/apis/credentials) で「＋認証情報を作成」→「API キー」。
+5. 表示されたキー（`AIza…`）をコピーし、ChannelViewer の設定に貼り付けて保存。
+
+おすすめ: キーの「アプリケーションの制限」を「ウェブサイト」にして `https://channelviewer.doitmyself.net/*` を、「API の制限」で「YouTube Data API v3」だけを選ぶ。
+
+支払い情報の登録は不要。無料枠は1日10,000ユニットで、このアプリの更新は50チャンネルごとに1ユニット。
 
 Google ログインは、LeadLog と同じ Google Cloud のプロジェクト「LeadLog」の OAuth クライアントを標準で使うので、設定は不要です。独自のクライアントを使う場合は、設定の「詳細設定」でクライアントIDを入力します。
 

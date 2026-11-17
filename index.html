@@ -165,7 +165,19 @@
       <div class="eyebrow">SETTINGS <span>●</span></div>
       <h2 id="settingsTitle">設定</h2>
       <label>YouTube Data API キー<input id="apiKeyInput" type="password" autocomplete="off" placeholder="AIza..." /></label>
-      <p class="hint">Google Cloud で YouTube Data API v3 を有効にしたキーを入れてください。ログイン中は Google ドライブにも保存され、同じアカウントの端末で共有されます。</p>
+      <p class="hint">登録者数の取得に使います。ログイン中は Google ドライブにも保存され、同じアカウントの端末で共有されます。</p>
+      <details class="guide" id="apiKeyGuide">
+        <summary>APIキーの取り方（無料・約5分）</summary>
+        <ol>
+          <li><a href="https://console.cloud.google.com/projectcreate" target="_blank" rel="noopener">Google Cloud Console</a> を開き、Google アカウントでログインします。初めての場合は利用規約に同意します。</li>
+          <li>「新しいプロジェクト」の画面で、プロジェクト名（例: <code>ChannelViewer</code>）を入れて「作成」を押します。</li>
+          <li><a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">YouTube Data API v3 のページ</a>を開き、上部で作ったプロジェクトが選ばれていることを確かめて「有効にする」を押します。</li>
+          <li><a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">認証情報のページ</a>で「＋認証情報を作成」→「API キー」を選びます。</li>
+          <li>表示されたキー（<code>AIza</code> で始まる文字列）をコピーして、上の欄に貼り付け、「保存する」を押します。</li>
+        </ol>
+        <p class="guide-note"><strong>おすすめ:</strong> 作ったキーの「キーを編集」で、「アプリケーションの制限」を「ウェブサイト」にして <code>https://channelviewer.doitmyself.net/*</code> を、「API の制限」で「YouTube Data API v3」だけを選ぶと、キーを他人に使われる心配が減ります。</p>
+        <p class="guide-note">クレジットカードの登録や支払いは不要です。無料枠は1日10,000回分で、このアプリの更新は1回あたり1回分（50チャンネルごと）なので、普通に使う分には上限に届きません。</p>
+      </details>
       <details class="advanced">
         <summary>詳細設定</summary>
         <label>Google OAuth クライアントID（任意）<input id="clientIdInput" type="text" autocomplete="off" placeholder="空欄なら標準のクライアントを使用" /></label>
