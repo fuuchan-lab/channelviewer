@@ -6,7 +6,7 @@
 import { createTokenWaiter } from './token-waiter.js';
 
 // 公開されるクライアントID（秘密ではない）。LeadLog と同じ Google Cloud のプロジェクト「LeadLog」の
-// OAuth クライアント。https://fuuchan-lab.github.io が承認済みの生成元に登録されている。
+// OAuth クライアント「LeadLog Web」。承認済みの生成元に https://channelviewer.doitmyself.net が必要。
 const DEFAULT_CLIENT_ID = '942895331241-pjiplv9bi1but307aia3ansjp2d71ro0.apps.googleusercontent.com';
 
 export const driveConfig = {

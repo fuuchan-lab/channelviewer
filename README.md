@@ -18,7 +18,7 @@ Google ログインを試す場合は、OAuth クライアントに登録済み�
 
 公開URL:
 
-https://fuuchan-lab.github.io/channelviewer/
+https://channelviewer.doitmyself.net/ （https://fuuchan-lab.github.io/channelviewer/ から転送）
 
 ## 機能
 
@@ -46,3 +46,5 @@ https://fuuchan-lab.github.io/channelviewer/
 右上の歯車から、YouTube Data API v3 の API キーを登録してください。
 
 Google ログインは、LeadLog と同じ Google Cloud のプロジェクト「LeadLog」の OAuth クライアントを標準で使うので、設定は不要です。独自のクライアントを使う場合は、設定の「詳細設定」でクライアントIDを入力します。
+
+OAuth クライアント「LeadLog Web」の「承認済みの JavaScript 生成元」に `https://channelviewer.doitmyself.net` が必要です。
