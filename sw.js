@@ -3,7 +3,7 @@
  * 公開し直すと次に開いた時から新しい版になる（バージョン番号を上げ忘れても古いままにならない）。
  * フォントとサムネイルは、一度表示したものを保存して使う。
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL_CACHE = `channelviewer-shell-${VERSION}`;
 const ASSET_CACHE = 'channelviewer-assets';
 const SHELL = [
